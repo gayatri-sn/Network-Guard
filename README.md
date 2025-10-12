@@ -7,7 +7,7 @@ Network Guard is a lightweight, real-time monitoring tool that functions as both
 # For detection:
 ## Test 1: Port Scanning Detection 🕵️
 Goal: To trigger the ALERT: Potential Port Scan Detected! message.
-Tool (Phone App): Install Fing app
+Tool (Phone App): Install Fing app <br>
 Steps:
 Download and open the Fing app on your phone.
 The app will automatically scan your network. You should see a list of devices. Find your computer in the list (it might be identified by its name, like "HP-Laptop" or just by the IP 10.70.5.42).
