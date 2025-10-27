@@ -10,3 +10,8 @@ python server.py
 host the html locally in  http://localhost:8000
 and submit a sample test
 note credit card number should begin with 4
+
+pip install mitmproxy
+http://127.0.0.1:8081/#/flows
+"C:\Users\vasav\AppData\Roaming\Python\Python312\Scripts\mitmweb.exe" -s proxy_inspector.py
+proxy-settings-manual on-127.0.0.1-port-8080
