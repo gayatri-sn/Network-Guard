@@ -1,165 +1,220 @@
 # ids_module.py
-# Author: Person 1 - Core Packet Sniffer + Intrusion Detection
-
-# --- Imports ---
-from scapy.all import sniff, IP, TCP, ARP
+from scapy.all import sniff, IP, TCP, ARP, Ether, sendp, get_if_hwaddr, conf
 import datetime
 import time
+import firewall_manager
 
-# --- Configuration Thresholds ---
-# Feel free to adjust these values based on your network's normal behavior.
 
-# Port Scan: How many different ports accessed by one IP before it's flagged.
-PORT_SCAN_THRESHOLD = 15
+MY_INTERFACE = "Wi-Fi"          # Correct from your ipconfig
+MY_GATEWAY_IP = "10.79.232.31"  # Correct from your ipconfig
+MY_IP = "10.79.232.131"         # Correct from your ipconfig
 
-# Traffic Anomaly: How many packets from one IP in a given time window is suspicious.
-TIME_WINDOW = 10  # in seconds
-PACKET_THRESHOLD = 30
 
-# --- Data Structures for Detection ---
 
-# Tracks port scan attempts: { 'source_ip': {port1, port2, ...} }
+NORMAL_PORT_SCAN_THRESHOLD = 15
+NORMAL_PACKET_THRESHOLD = 30
+HIGH_PORT_SCAN_THRESHOLD = 3
+HIGH_PACKET_THRESHOLD = 10
+DISTRIBUTED_SCAN_THRESHOLD = 20
+DISTRIBUTED_TIME_WINDOW = 10
+TIME_WINDOW = 10
+HIGH_ALERT_COOLDOWN = 600
+
+
+threat_state = {"level": "NORMAL", "high_alert_until": 0.0}
+arp_alert_cooldown = {} 
 port_scan_tracker = {}
-
-# Stores the trusted IP-to-MAC address mapping: { 'ip_address': 'mac_address' }
 arp_table = {}
-
-# Counts packets from each IP for anomaly detection: { 'source_ip': packet_count }
 traffic_monitor = {}
 last_check_time = time.time()
+port_access_tracker = {}
+last_distributed_check = time.time()
 
 
-# --- Detection Logic ---
+def set_high_alert():
+    global threat_state
+    if threat_state["level"] == "NORMAL":
+        print("\n" + "!"*50)
+        print(" THREAT DETECTED! Entering HIGH-ALERT state.")
+        print(f"   Adaptive thresholds are now active for {HIGH_ALERT_COOLDOWN}s.")
+        print("!"*50 + "\n")
+    threat_state["level"] = "HIGH"
+    threat_state["high_alert_until"] = time.time() + HIGH_ALERT_COOLDOWN
+    print(f"[STATE] High-Alert timer reset. Cooldown until {time.ctime(threat_state['high_alert_until'])}")
+
+def check_threat_level():
+    global threat_state
+    if threat_state["level"] == "HIGH" and time.time() > threat_state["high_alert_until"]:
+        print("\n" + "*"*50)
+        print(" COOLDOWN COMPLETE. Returning to NORMAL state.")
+        print("*"*50 + "\n")
+        threat_state["level"] = "NORMAL"
+
+
 
 def detect_port_scan(packet):
-    """
-    Identifies port scanning by tracking connection attempts (TCP SYN packets)
-    from a single source IP to multiple destination ports.
-    """
-    if TCP in packet and packet[TCP].flags == "S":  # "S" is the SYN flag for a new connection
+    if threat_state["level"] == "HIGH": current_threshold = HIGH_PORT_SCAN_THRESHOLD
+    else: current_threshold = NORMAL_PORT_SCAN_THRESHOLD
+    
+    if TCP in packet and packet[TCP].flags == "S":
         src_ip = packet[IP].src
         dst_port = packet[TCP].dport
-
-        # Initialize tracker for this IP if it's new
-        if src_ip not in port_scan_tracker:
-            port_scan_tracker[src_ip] = set()
-
-        # Add the accessed port to the set for that IP
+        if src_ip not in port_scan_tracker: port_scan_tracker[src_ip] = set()
         port_scan_tracker[src_ip].add(dst_port)
 
-        # If the number of unique ports exceeds our threshold, raise an alert
-        if len(port_scan_tracker[src_ip]) > PORT_SCAN_THRESHOLD:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            alert_message = (
-                f"ALERT: Potential Port Scan Detected!\n"
-                f"  - Timestamp: {timestamp}\n"
-                f"  - Attack Type: Port Scan\n"
-                f"  - Source IP:   {src_ip}\n"
-                f"  - Details:     Accessed {len(port_scan_tracker[src_ip])} unique ports."
-            )
-            print(f"\n{'='*40}\n{alert_message}\n{'='*40}\n")
-            # Reset after alerting to avoid repeated messages for the same scan
-            port_scan_tracker[src_ip] = set()
+        if len(port_scan_tracker[src_ip]) > current_threshold:
+            alert("Vertical Port Scan", src_ip, f"Accessed {len(port_scan_tracker[src_ip])} ports (Threshold: {current_threshold}).")
+            
+            
+            if src_ip == "127.0.0.1" or src_ip == MY_GATEWAY_IP or src_ip == MY_IP:
+                print(f"[NIPS] Port scan from local IP {src_ip} detected. Ignoring.")
+            else:
+                print(f"[NIPS] External port scan from {src_ip} detected. Taking action.")
+                firewall_manager.block_ip(src_ip)
+                set_high_alert()
+            
+            
+            port_scan_tracker[src_ip] = set() 
 
+def detect_distributed_scan(packet):
+    global last_distributed_check
+    if TCP in packet and packet[TCP].flags == "S":
+        src_ip = packet[IP].src
+        dst_port = packet[TCP].dport
+        if dst_port not in port_access_tracker: port_access_tracker[dst_port] = set()
+        port_access_tracker[dst_port].add(src_ip)
+
+    current_time = time.time()
+    if current_time - last_distributed_check > DISTRIBUTED_TIME_WINDOW:
+        for port, ips in port_access_tracker.items():
+            if len(ips) > DISTRIBUTED_SCAN_THRESHOLD:
+                alert("Distributed Scan", f"Port {port}", f"Accessed by {len(ips)} IPs in {DISTRIBUTED_TIME_WINDOW}s.")
+                set_high_alert()
+        port_access_tracker.clear()
+        last_distributed_check = current_time
 
 def detect_arp_spoof(packet):
     """
-    Detects ARP spoofing by checking if an IP address suddenly claims a new
-    MAC address, which contradicts our learned ARP table.
+    Detects ARP spoofing, alerts ONCE, and then continuously
+    sends prevention packets without flooding the console.
     """
-    # An ARP "is-at" reply (op=2) is used for the attack
-    if ARP in packet and packet[ARP].op == 2:
+    global arp_alert_cooldown
+    
+    if ARP in packet and packet[ARP].op == 2: 
         sender_ip = packet[ARP].psrc
         sender_mac = packet[ARP].hwsrc
 
-        # If we have this IP in our table but the MAC is different, it's a spoof
-        if sender_ip in arp_table and arp_table[sender_ip] != sender_mac:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            alert_message = (
-                f"ALERT: Potential ARP Spoofing Detected!\n"
-                f"  - Timestamp: {timestamp}\n"
-                f"  - Attack Type: ARP Spoof\n"
-                f"  - IP Address:  {sender_ip}\n"
-                f"  - Details:     IP was at {arp_table[sender_ip]}, but is now claiming to be at {sender_mac}."
-            )
-            print(f"\n{'='*40}\n{alert_message}\n{'='*40}\n")
-
-        # Update our table with the most recent mapping
-        arp_table[sender_ip] = sender_mac
+        
+        if sender_ip not in arp_table:
+           
+            print("\n" + "#"*70)
+            print(f"####  [ARP LEARNED] New Host: {sender_ip} is at {sender_mac}  ####")
+            print("#  Run the spoofer AGAIN with a NEW MAC to trigger the REAL alert.  #")
+            print("#"*70 + "\n")
+            arp_table[sender_ip] = sender_mac # Add to trusted table
+            return
+            
+        
+        if arp_table[sender_ip] != sender_mac:
+            
+            
+          
+            current_time = time.time()
+            if current_time > arp_alert_cooldown.get(sender_ip, 0):
+                
+                alert(
+                    "ARP Spoofing",
+                    sender_ip,
+                    f"IP was at {arp_table[sender_ip]}, but now claims {sender_mac}."
+                )
+                
+                
+                arp_alert_cooldown[sender_ip] = current_time + 60 
+                
+                
+                set_high_alert()
+            
+           
+            try:
+                true_gateway_mac = arp_table.get(MY_GATEWAY_IP)
+                if sender_ip == MY_GATEWAY_IP and true_gateway_mac:
+                    correction_packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(op=2, pdst="255.255.255.255", psrc=MY_GATEWAY_IP, hwsrc=true_gateway_mac)
+                    sendp(correction_packet, iface=MY_INTERFACE, verbose=False)
+            except Exception as e:
+                
+                pass 
 
 
 def detect_traffic_anomaly(packet):
     """
-    Monitors for an unusually high volume of packets from a single source IP
-    within a short time window, which could indicate a DoS flood attack.
+    Monitors for an unusually high volume of packets (DoS).
     """
-    global last_check_time  # Use the global variable to track time
+    global last_check_time
+    check_threat_level()
+    if threat_state["level"] == "HIGH": current_threshold = HIGH_PACKET_THRESHOLD
+    else: current_threshold = NORMAL_PACKET_THRESHOLD
 
     if IP in packet:
         src_ip = packet[IP].src
         traffic_monitor[src_ip] = traffic_monitor.get(src_ip, 0) + 1
 
     current_time = time.time()
-    # Check if the time window has elapsed
     if current_time - last_check_time > TIME_WINDOW:
         for ip, count in traffic_monitor.items():
-            if count > PACKET_THRESHOLD:
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                alert_message = (
-                    f"ALERT: Traffic Anomaly Detected!\n"
-                    f"  - Timestamp:   {timestamp}\n"
-                    f"  - Attack Type:   Potential DoS Flood\n"
-                    f"  - Source IP:     {ip}\n"
-                    f"  - Details:       Received {count} packets in the last {TIME_WINDOW} seconds."
-                )
-                print(f"\n{'='*40}\n{alert_message}\n{'='*40}\n")
+            if count > current_threshold:
+                alert("Traffic Anomaly (DoS)", ip, f"Received {count} packets in {TIME_WINDOW}s (Threshold: {current_threshold}).")
+                
+                
+                if ip == "127.0.0.1" or ip == MY_GATEWAY_IP or ip == MY_IP:
+                    print(f"[NIPS] High traffic from local IP {ip} detected. Ignoring.")
+                else:
+                    print(f"[NIPS] External threat from {ip} detected. Taking action.")
+                    firewall_manager.block_ip(ip)
+                    set_high_alert()
 
-        # Reset for the next time window
         traffic_monitor.clear()
         last_check_time = current_time
 
 
-# --- Main Sniffer Function ---
 
-# --- Main Sniffer Function ---
+def alert(attack_type, source, details):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    alert_message = (
+        f"ALERT: {attack_type} Detected!\n"
+        f"    - Timestamp: {timestamp}\n"
+        f"   - Source:    {source}\n"
+        f"   - Details:   {details}"
+    )
+    print(f"\n{'='*50}\n{alert_message}\n{'='*50}\n")
 
 def packet_callback(packet):
     """
-    This is the main callback function that Scapy will execute for each
-    packet sniffed. It safely orchestrates the detection logic.
+    Main callback function.
+    To test ARP spoofing, add a '#' before 'detect_traffic_anomaly'
+    to temporarily mute it.
     """
-    # First, handle ARP packets, which do NOT have an IP layer.
-    # We must check for this separately.
     if ARP in packet:
         detect_arp_spoof(packet)
-        return  # Stop processing this packet since it's not IP-based
-
-    # Next, handle all IP-based packets.
-    # The other detectors rely on the presence of an IP layer.
+        return
     if IP in packet:
-        detect_traffic_anomaly(packet)
+        detect_traffic_anomaly(packet) 
         detect_port_scan(packet)
-    
-    # Any packet that is not ARP or IP will be ignored by our logic.
-
-# The start_sniffer() and if __name__ == "__main__": parts remain the same.
-
+        detect_distributed_scan(packet)
 
 def start_sniffer():
-    """
-    Starts the main packet sniffer.
-    """
-    print("🚀 Network Guard IDS starting up...")
-    print("Sniffing for network intrusions. Press Ctrl+C to stop.")
+    print(" Network Guard NIPS starting up...")
+    print(f"Sniffing on interface: {MY_INTERFACE}")
+    print(f"Defending Gateway: {MY_GATEWAY_IP}")
+    print("Press Ctrl+C to stop.")
     try:
-        # 'prn' specifies the callback function
-        # 'store=0' prevents Scapy from storing packets in memory
-        sniff(iface="Wi-Fi", prn=packet_callback, store=0)
+        sniff(iface=MY_INTERFACE, prn=packet_callback, store=0)
     except Exception as e:
         print(f"\n[ERROR] An error occurred: {e}")
     finally:
-        print("\n🛑 Network Guard IDS shutting down.")
-
+        
+        firewall_manager.cleanup_all_blocks()
+        print("\n Network Guard NIPS shutting down.")
 
 if __name__ == "__main__":
+    firewall_manager.check_admin_privileges()
     start_sniffer()
