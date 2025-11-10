@@ -15,3 +15,5 @@ pip install mitmproxy
 http://127.0.0.1:8081/#/flows
 "C:\Users\vasav\AppData\Roaming\Python\Python312\Scripts\mitmweb.exe" -s proxy_inspector.py
 proxy-settings-manual on-127.0.0.1-port-8080
+.\venv\Scripts\activate
+mitmweb -s proxy_inspector.py
