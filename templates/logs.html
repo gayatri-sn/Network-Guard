@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decrypted Logs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .sensitive {
+            background-color: #fffbeb !important;
+            font-weight: 600;
+        }
+        .ids-row {
+            background-color: #fee2e2; /* light red */
+        }
+        .dlp-row {
+            background-color: #dbeafe; /* light blue */
+        }
+        .ids-row:hover {
+            background-color: #fecaca; /* darker red on hover */
+        }
+        .dlp-row:hover {
+            background-color: #bfdbfe; /* darker blue on hover */
+        }
+    </style>
+</head>
+
+<body class="p-4 md:p-8 min-h-screen bg-gray-100">
+    <div class="max-w-7xl mx-auto">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center py-4 border-b border-gray-300 mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Security Dashboard</h1>
+            <nav>
+                <a href="/" class="text-lg font-semibold text-gray-600 hover:text-blue-600 transition duration-150 rounded-lg p-2">
+                    Home (Alerts)
+                </a>
+                <a href="/logs" class="ml-4 text-lg font-semibold text-blue-600 hover:text-blue-800 transition duration-150 rounded-lg p-2 bg-blue-100">
+                    Decrypted Logs
+                </a>
+            </nav>
+        </header>
+
+        <!-- Main Logs Section -->
+        <div class="bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-gray-200">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-700">Decrypted Log File Content</h2>
+            <p class="mb-4 text-sm text-gray-500">
+                The following data has been decrypted securely from the encrypted log file.
+                IDS events are shown in <span class="text-red-600 font-semibold">red</span> and DLP events in <span class="text-blue-600 font-semibold">blue</span>.
+            </p>
+
+            {% if error %}
+                <div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg font-mono">
+                    <strong>Decryption Error:</strong> {{ error }}
+                </div>
+            {% else %}
+                <div class="overflow-x-auto rounded-lg shadow-md border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                {% for col in header %}
+                                    {% set is_sensitive = 'sensitive' in col.lower() or 'email' in col.lower() or 'ip' in col.lower() %}
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider {% if is_sensitive %}sensitive text-red-700{% endif %}">
+                                        {{ col }}
+                                    </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-gray-100">
+                            {% for row in data %}
+                                {% set source_type = row[-1] | trim | upper %}
+                                {% if source_type == "IDS" %}
+                                    {% set row_class = "ids-row" %}
+                                {% elif source_type == "DLP" %}
+                                    {% set row_class = "dlp-row" %}
+                                {% else %}
+                                    {% set row_class = "" %}
+                                {% endif %}
+
+                                <tr class="{{ row_class }} transition duration-150">
+                                    {% for i in range(header|length) %}
+                                        {% set col_name = header[i] %}
+                                        {% set cell_data = row[i] %}
+                                        {% set is_sensitive = 'sensitive' in col_name.lower() or 'email' in col_name.lower() or 'ip' in col_name.lower() %}
+                                        <td class="px-6 py-3 whitespace-nowrap text-gray-900 {% if is_sensitive %}sensitive{% endif %}">
+                                            {{ cell_data }}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

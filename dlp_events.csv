@@ -1,0 +1,3 @@
+Timestamp,Source_IP,Destination_IP,Data_Type,Matched_Content,Source_URL,SourceType
+2025-11-10 11:17:33,10.70.2.42,-,Traffic Anomaly (DoS),Received 52 packets in 10s (Threshold: 10).,IDS,IDS
+2025-11-10 11:17:33,13.69.109.131,-,Traffic Anomaly (DoS),Received 39 packets in 10s (Threshold: 10).,IDS,IDS

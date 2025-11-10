@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DLP Test Form</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; }
+        input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+        button { padding: 10px 15px; }
+    </style>
+</head>
+<body>
+    <h1>DLP Test Page</h1>
+    <p>Submit this form to send unencrypted data that your DLP script can detect.</p>
+    <form action="https://httpbin.org/post" method="post">
+        <label for="email">Email Address:</label>
+        <input type="text" id="email" name="email" value="test.user@example.com">
+
+        <label for="cc">Credit Card:</label>
+        <input type="text" id="cc" name="credit_card" value="4111222233334444">
+
+        <label for="phone">Phone Number:</label>
+        <input type="text" id="phone" name="phone" value="(123) 456-7890">
+
+        <label for="gps">GPS Coordinates:</label>
+        <input type="text" id="gps" name="gps" value="40.7128, -74.0060">
+
+        <button type="submit">Send Test Data</button>
+    </form>
+</body>
+</html>
