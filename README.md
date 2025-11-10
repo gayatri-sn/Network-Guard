@@ -53,20 +53,25 @@ It provides real-time alerting, encrypted log management, and intuitive visualiz
 🖥️ Running the Project
 1. Clone the Repository
 git clone https://github.com/gayatri-sn/Network-Guard.git
+
 cd Network-Guard
 
 2. Generate Encryption Key (if not exists)
+
 python crypto.py
 
 3. Run the Flask Dashboard
+
 python app.py
 
 Dashboard runs at → http://127.0.0.1:5000
 
 4. Start IDS Module (command prompt/ powershell as admin)
+
 python ids_module.py
 
 5. Run the Proxy Inspector (DLP)
+
 mitmweb -s proxy.py
 
 **Dashboard Preview**
