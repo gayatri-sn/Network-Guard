@@ -36,15 +36,6 @@ It provides real-time alerting, encrypted log management, and intuitive visualiz
 - Historical log viewing with decrypted and highlighted sensitive data.
 
 
-**Tech Stack**
-Layer	Technology
-Backend	Python (Flask, Scapy, Cryptography)
-Frontend	HTML, Tailwind CSS, JavaScript
-Real-time Stream	Server-Sent Events (SSE)
-Encryption	Fernet (AES-128 symmetric encryption)
-Logging	CSV + Encrypted Binary
-Defense	OS Firewall (via Python subprocess)
-
 **How It Works**
 
 - IDS module (ids_module.py) captures live packets and detects anomalies (DoS, ARP spoofing, port scans).
