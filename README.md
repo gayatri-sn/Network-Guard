@@ -7,33 +7,33 @@ It provides real-time alerting, encrypted log management, and intuitive visualiz
 
 **Intrusion Detection System (IDS):**
 
-Detects port scans, ARP spoofing, and DoS/flood attacks using Scapy.
+- Detects port scans, ARP spoofing, and DoS/flood attacks using Scapy.
 
-Automatically blocks offending IPs via OS-level firewall control.
+- Automatically blocks offending IPs via OS-level firewall control.
 
-Logs events with timestamps, IPs, and detected attack types.
+- Logs events with timestamps, IPs, and detected attack types.
 
 **Data Leak Prevention (DLP):**
 
-Monitors outbound data for sensitive information (Emails, Credit Cards, Phone Numbers, GPS Coordinates).
+- Monitors outbound data for sensitive information (Emails, Credit Cards, Phone Numbers, GPS Coordinates).
 
-Integrates with an HTTP/HTTPS proxy for live packet inspection.
+- Integrates with an HTTP/HTTPS proxy for live packet inspection.
 
-Generates structured alerts for outgoing sensitive payloads.
+- Generates structured alerts for outgoing sensitive payloads.
 
 **Encryption & Logging:**
 
-All events are logged in plaintext (dlp_events.csv) and encrypted (encrypted_logs.csv) using Fernet AES encryption.
+- All events are logged in plaintext (dlp_events.csv) and encrypted (encrypted_logs.csv) using Fernet AES encryption.
 
-Decryption occurs only within Flask; no plaintext exposure on disk.
+- Decryption occurs only within Flask; no plaintext exposure on disk.
 
 **Unified Flask Dashboard:**
 
-Live alert streaming via Server-Sent Events (SSE).
+- Live alert streaming via Server-Sent Events (SSE).
 
-Color-coded alerts: Red IDS Alerts and Blue DLP Alerts.
+- Color-coded alerts: Red IDS Alerts and Blue DLP Alerts.
 
-Historical log viewing with decrypted and highlighted sensitive data.
+- Historical log viewing with decrypted and highlighted sensitive data.
 
 
 **Tech Stack**
@@ -47,17 +47,17 @@ Defense	OS Firewall (via Python subprocess)
 
 **How It Works**
 
-IDS module (ids_module.py) captures live packets and detects anomalies (DoS, ARP spoofing, port scans).
+- IDS module (ids_module.py) captures live packets and detects anomalies (DoS, ARP spoofing, port scans).
 
-DLP module (proxy_inspector.py) scans HTTP traffic for sensitive data using regex.
+- DLP module (proxy_inspector.py) scans HTTP traffic for sensitive data using regex.
 
-Both modules log events → dlp_events.csv.
+- Both modules log events → dlp_events.csv.
 
-Encryption layer (crypto.py, encrypted_logger.py) encrypts logs into encrypted_logs.csv.
+- Encryption layer (crypto.py, encrypted_logger.py) encrypts logs into encrypted_logs.csv.
 
-Flask app (app.py) streams live alerts to the frontend and decrypts logs for viewing.
+- Flask app (app.py) streams live alerts to the frontend and decrypts logs for viewing.
 
-Frontend (index.html, logs.html) visualizes real-time and historical data with dynamic color-coding.
+- Frontend (index.html, logs.html) visualizes real-time and historical data with dynamic color-coding.
 
 🖥️ Running the Project
 1. Clone the Repository
@@ -86,16 +86,6 @@ Page	Description
 IDS Alerts — Intrusion/Attack detections
 DLP Alerts — Sensitive data transmission detections
 
-**Security Highlights**
-
-End-to-end encryption for all stored logs.
-
-Only Flask backend can decrypt data.
-
-Adaptive IDS thresholds based on alert frequency.
-
-Duplicate suppression and event caching to reduce false positives.
-
 **Testing**
 
 Use the following simulation scripts to test individual modules:
@@ -107,8 +97,6 @@ test_dos_flood.py → simulates DoS attack
 test_arp_direct.py → checks ARP spoof detection
 
 test_form.html → tests DLP regex detection via HTTP POST
-
-
 
 
 
